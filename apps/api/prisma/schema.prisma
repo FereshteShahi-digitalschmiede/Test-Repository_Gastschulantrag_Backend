@@ -1,0 +1,117 @@
+// Datenmodell des Gastschulverfahrens. Fachliche Bedeutung siehe packages/shared/src/vorgang.ts
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VorgangStatus {
+  in_pruefung
+  bescheid_bereit
+  abgeschlossen
+}
+
+enum LaufwegModus {
+  gestuft
+  sequenziell
+}
+
+enum StellenRolle {
+  sprengelschule
+  gastschule
+  traeger_sprengelschule
+  traeger_gastschule
+  regierung
+}
+
+enum StellenStatus {
+  wartet
+  offen
+  zugestimmt
+  abgelehnt
+  bedingt
+  entfaellt
+}
+
+enum Signatur {
+  qualifiziert
+  fortgeschritten
+  einfach
+  system
+}
+
+/// Ein eingereichter Gastschulantrag mit seinem Laufweg
+model Vorgang {
+  id               String        @id @default(uuid())
+  nummer           Int           @unique @default(autoincrement())
+  aktenzeichen     String?       @unique
+  status           VorgangStatus @default(in_pruefung)
+  eingegangenAm    DateTime      @default(now())
+  schuljahr        String
+  sprengelschuleNr String
+  gastschuleNr     String
+  /// Anzeigename für Übersichten (Vorname Nachname)
+  schuelerName     String
+  ausbildungsberuf String?
+  laufwegModus     LaufwegModus  @default(gestuft)
+  /// Vollständige, validierte Antragsdaten (AntragEinreichen)
+  antrag           Json
+  /// Ergebnis der Fahrzeitenprüfung (FahrzeitErgebnis), falls Grund "fahrzeit"
+  fahrzeit         Json?
+
+  stellen   Stelle[]
+  dokumente Dokument[]
+  protokoll Protokolleintrag[]
+
+  @@index([sprengelschuleNr])
+  @@index([gastschuleNr])
+}
+
+/// Eine beteiligte Stelle im Laufweg und ihre Erklärung
+model Stelle {
+  id           String        @id @default(uuid())
+  vorgangId    String
+  vorgang      Vorgang       @relation(fields: [vorgangId], references: [id], onDelete: Cascade)
+  rolle        StellenRolle
+  organisation String
+  stufe        Int
+  status       StellenStatus
+  frist        DateTime?     @db.Date
+  begruendung  String?
+  abgegebenAm  DateTime?
+
+  @@unique([vorgangId, rolle])
+}
+
+/// Nachweis oder Anlage; der Inhalt liegt im S3-Speicher
+model Dokument {
+  id                  String   @id @default(uuid())
+  vorgangId           String
+  vorgang             Vorgang  @relation(fields: [vorgangId], references: [id], onDelete: Cascade)
+  dateiname           String
+  groesseBytes        Int
+  besondereKategorie  Boolean  @default(false)
+  automatischErstellt Boolean  @default(false)
+  speicherSchluessel  String?
+  hochgeladenAm       DateTime @default(now())
+}
+
+/// Revisionsprotokoll – Einträge werden nur angefügt, nie geändert
+model Protokolleintrag {
+  id           String   @id @default(uuid())
+  vorgangId    String
+  vorgang      Vorgang  @relation(fields: [vorgangId], references: [id], onDelete: Cascade)
+  zeitpunkt    DateTime @default(now())
+  ereignis     String
+  organisation String?
+  akteur       String
+  rolle        String
+  ebene        Int
+  signatur     Signatur
+
+  @@index([vorgangId, zeitpunkt])
+}

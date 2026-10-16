@@ -27,6 +27,8 @@ Voraussetzungen: Node.js 22, pnpm 10, Docker.
 cp .env.example .env
 pnpm install
 pnpm infra:up      # Datenbank, S3, Keycloak, Mailpit starten
+pnpm --filter @gastschulantrag/api db:deploy   # Datenbankschema anlegen
+pnpm build && pnpm --filter @gastschulantrag/api db:seed   # Testvorgänge anlegen
 pnpm dev           # API mit Neustart bei Änderungen
 ```
 
@@ -47,6 +49,26 @@ pnpm dev           # API mit Neustart bei Änderungen
 | `pnpm typecheck` | Typprüfung |
 | `pnpm test` | Tests |
 | `pnpm infra:down` | lokale Infrastruktur stoppen |
+| `pnpm --filter @gastschulantrag/api db:migrate` | nach Änderung an `prisma/schema.prisma`: Migration erzeugen |
+| `pnpm --filter @gastschulantrag/api db:reset` | Datenbank leeren und Testvorgänge neu anlegen |
+
+Tests laufen gegen eine eigene Datenbank `gastschule_test` (wird automatisch angelegt), die Entwicklungsdaten bleiben unberührt.
+
+## Endpunkte
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| GET | `/health` | Erreichbarkeit von API und Datenbank |
+| GET | `/schulen`, `/schulen/{nr}` | Schuldaten: Adresse, frühester Unterrichtsbeginn, spätestes Ende, Träger, Regierung |
+| POST | `/fahrzeit/vergleich` | Schnellste ÖPNV-Verbindung zu Sprengel- und Gastschule, Bewertung gegen 2 Std. je Weg |
+| POST | `/antraege` | Antrag einreichen → Vorgang mit Laufweg und Revisionsprotokoll |
+| GET | `/vorgaenge?schule={nr}` | Antragsübersicht, optional gefiltert nach beteiligter Schule |
+| GET | `/vorgaenge/{id oder Aktenzeichen}` | Vorgang mit Laufweg, Fahrzeitenprüfung, Dokumenten, Protokoll |
+
+Details und Beispiel-Schemas: http://localhost:3100/docs
+
+**Simuliert** (austauschbare Adapter): Schuldaten (`apps/api/src/schulen/schuldaten.ts`) und ÖPNV-Auskunft (`apps/api/src/fahrzeit/simulierte-oepnv-auskunft.ts`).
+**Noch ohne Anmeldung:** Alle Endpunkte sind offen – Rechte und Pseudonymisierung folgen mit Keycloak (Etappe 4).
 
 ## Arbeitsweise
 

@@ -6,9 +6,13 @@ const Env = z.object({
     .string()
     .default('http://localhost:5173')
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
+  DATABASE_URL: z.string().startsWith('postgresql://', 'DATABASE_URL muss mit postgresql:// beginnen'),
 });
 
 export type Config = z.infer<typeof Env>;
+
+/** Injection-Token für die geprüfte Konfiguration */
+export const CONFIG = Symbol('CONFIG');
 
 /** Liest und prüft die Umgebungsvariablen beim Start – Fehler fallen sofort auf, nicht erst im Betrieb. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
