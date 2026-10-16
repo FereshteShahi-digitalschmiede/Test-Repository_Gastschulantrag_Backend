@@ -64,8 +64,10 @@ Tests laufen gegen eine eigene Datenbank `gastschule_test` (wird automatisch ang
 | POST | `/antraege` | Antrag einreichen → Vorgang mit Laufweg und Revisionsprotokoll; Antwort enthält einmalig den Zugangsschlüssel |
 | GET | `/antraege/{Aktenzeichen}` | Stand des eigenen Antrags (Header `X-Zugangsschluessel`) |
 | POST | `/antraege/{Aktenzeichen}/dokumente` | Nachweis hochladen: PDF/PNG/JPG bis 10 MB, Feld `datei` (Header `X-Zugangsschluessel`) |
-| GET | `/vorgaenge?schule={nr}` | Antragsübersicht, optional gefiltert nach beteiligter Schule |
+| GET | `/vorgaenge?schule={nr}&organisation={name}` | Antragsübersicht mit Stand je Stelle, optional gefiltert nach Schule oder beteiligter Organisation |
 | GET | `/vorgaenge/{id oder Aktenzeichen}` | Vorgang mit Laufweg, Fahrzeitenprüfung, Dokumenten, Protokoll |
+| POST | `/vorgaenge/{id}/stellen/sprengelschule/empfehlung` | Empfehlung der Sachbearbeitung an die Schulleitung |
+| POST | `/vorgaenge/{id}/stellen/{rolle}/erklaerung` | Erklärung einer Stelle; der Laufweg schaltet automatisch weiter (Logik: `apps/api/src/vorgaenge/laufweg.ts`) |
 
 Details und Beispiel-Schemas: http://localhost:3100/docs
 

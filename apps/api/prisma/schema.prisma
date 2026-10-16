@@ -85,6 +85,14 @@ model Stelle {
   frist        DateTime?     @db.Date
   begruendung  String?
   abgegebenAm  DateTime?
+  /// Fachliche Angaben zur Erklärung, z. B. { kap: "vorhanden" }
+  angaben      Json?
+  /// Empfehlung der Sachbearbeitung (nur Sprengelschule), Grundlage für die Entscheidung der Schulleitung
+  empfehlung   Json?
+  akteurName     String?
+  akteurFunktion String?
+  ebene          Int?
+  signatur       Signatur?
 
   @@unique([vorgangId, rolle])
 }
