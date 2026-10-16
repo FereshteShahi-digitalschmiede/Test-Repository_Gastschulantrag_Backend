@@ -36,6 +36,8 @@ describe('Anmeldung, Rechte und Datenminimierung', () => {
   it('öffentliche Endpunkte bleiben ohne Anmeldung erreichbar', async () => {
     await api().get('/health').expect(200);
     await api().get('/schulen').expect(200);
+    const k = (await api().get('/konfiguration').expect(200)).body;
+    expect(k.anmeldung).toEqual({ issuer: 'http://localhost:8080/realms/gastschule', clientId: 'bearbeitung' });
   });
 
   it('nicht beteiligte Organisation sieht nichts', async () => {

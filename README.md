@@ -59,6 +59,7 @@ Tests laufen gegen eine eigene Datenbank `gastschule_test` (wird automatisch ang
 | Methode | Pfad | Zweck |
 |---|---|---|
 | GET | `/health` | Erreichbarkeit von API und Datenbank |
+| GET | `/konfiguration` | Anmeldedaten (Keycloak-Adresse, Client) für die Bearbeitungsseite |
 | GET | `/schulen`, `/schulen/{nr}` | Schuldaten: Adresse, frühester Unterrichtsbeginn, spätestes Ende, Träger, Regierung |
 | POST | `/fahrzeit/vergleich` | Schnellste ÖPNV-Verbindung zu Sprengel- und Gastschule, Bewertung gegen 2 Std. je Weg |
 | POST | `/antraege` | Antrag einreichen → Vorgang mit Laufweg und Revisionsprotokoll; Antwort enthält einmalig den Zugangsschlüssel |
