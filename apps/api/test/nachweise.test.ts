@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DEMO_ANTRAEGE } from '../src/demo-antraege.js';
 import { DATEI_SPEICHER, type DateiSpeicher } from '../src/speicher/datei-speicher.js';
 import { PrismaService } from '../src/datenbank/prisma.service.js';
-import { leereDatenbank, starteApp } from './hilfen.js';
+import { als, leereDatenbank, starteApp } from './hilfen.js';
 
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
@@ -59,7 +59,7 @@ describe('Antragsstand und Nachweise für Antragstellende', () => {
     const stand = (await api().get(`/antraege/${az}`).set('X-Zugangsschluessel', schluessel).expect(200)).body;
     expect(stand.dokumente).toHaveLength(1);
     expect(stand.nachrichten[0]).toMatchObject({ titel: 'Nachweis erhalten' });
-    const vorgang = (await api().get(`/vorgaenge/${az}`).expect(200)).body;
+    const vorgang = (await api().get(`/vorgaenge/${az}`).set('Authorization', await als('schneider')).expect(200)).body;
     expect(vorgang.dokumente[0].dateiname).toBe('Fahrplan Auszug.pdf');
     expect(vorgang.protokoll[0].ereignis).toBe('Nachweis hochgeladen: Fahrplan Auszug.pdf');
   });

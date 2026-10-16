@@ -23,9 +23,12 @@ services:
     ports: ["8333:8333"]
     volumes: [s3data:/data]
 
+  # Login für die Bearbeitungsseite. Realm „gastschule" mit Testkonten wird beim ersten Start importiert
+  # (keycloak/realm-gastschule.json, Passwort aller Testkonten: test).
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
-    command: start-dev
+    command: start-dev --import-realm
+    volumes: ["./keycloak:/opt/keycloak/data/import:ro"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin

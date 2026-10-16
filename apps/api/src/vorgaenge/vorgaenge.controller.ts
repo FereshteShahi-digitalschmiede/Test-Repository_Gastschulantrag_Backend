@@ -1,10 +1,12 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
-  ApiBadRequestResponse, ApiBody, ApiConflictResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags,
+  ApiBadRequestResponse, ApiBearerAuth, ApiForbiddenResponse, ApiUnauthorizedResponse, ApiBody, ApiConflictResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { ErklaerungAbgeben, StellenRolle, VorgangDetail, VorgangKurz } from '@gastschulantrag/shared';
 import { z } from 'zod';
+import { AktuellerBenutzer } from '../auth/auth.guard.js';
+import type { Benutzer } from '../auth/benutzer.js';
 import { openapi, ZodPipe } from '../common/zod.js';
 import { ErklaerungenService } from './erklaerungen.service.js';
 import { VorgaengeService } from './vorgaenge.service.js';
@@ -12,25 +14,27 @@ import { VorgaengeService } from './vorgaenge.service.js';
 const ROLLE_PARAM = { name: 'rolle', enum: StellenRolle.options, description: 'Stelle im Laufweg' };
 
 @ApiTags('Vorgänge')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Anmeldung fehlt oder ist abgelaufen' })
 @Controller('vorgaenge')
 export class VorgaengeController {
   constructor(private readonly vorgaenge: VorgaengeService, private readonly erklaerungen: ErklaerungenService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Antragsübersicht', description: 'Noch ohne Anmeldung (nur Testdaten); Rechteprüfung folgt mit Keycloak.' })
+  @ApiOperation({ summary: 'Antragsübersicht', description: 'Nur Vorgänge, an denen eine Organisation der angemeldeten Person beteiligt ist (Regierung erst bei Dissens). Für Sachaufwandsträger pseudonymisiert.' })
   @ApiQuery({ name: 'schule', required: false, description: 'Schulnummer – nur Vorgänge, an denen diese Schule beteiligt ist' })
   @ApiQuery({ name: 'organisation', required: false, description: 'Name einer Stelle im Laufweg, z. B. „Stadt Augsburg"' })
   @ApiOkResponse({ schema: openapi(z.array(VorgangKurz)) })
-  liste(@Query('schule') schule?: string, @Query('organisation') organisation?: string) {
-    return this.vorgaenge.liste({ schule, organisation });
+  liste(@AktuellerBenutzer() b: Benutzer, @Query('schule') schule?: string, @Query('organisation') organisation?: string) {
+    return this.vorgaenge.liste(b, { schule, organisation });
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Vorgang mit Laufweg, Dokumenten und Revisionsprotokoll', description: 'ID oder Aktenzeichen (z. B. GS-2026-88001)' })
   @ApiOkResponse({ schema: openapi(VorgangDetail) })
   @ApiNotFoundResponse({ description: 'Vorgang nicht gefunden' })
-  detail(@Param('id') id: string) {
-    return this.vorgaenge.detail(id);
+  detail(@Param('id') id: string, @AktuellerBenutzer() b: Benutzer) {
+    return this.vorgaenge.detail(id, b);
   }
 
   @Post(':id/stellen/:rolle/empfehlung')
@@ -41,8 +45,12 @@ export class VorgaengeController {
   @ApiOkResponse({ schema: openapi(VorgangDetail) })
   @ApiBadRequestResponse({ description: 'Eingabe ungültig' })
   @ApiConflictResponse({ description: 'Stelle ist nicht an der Reihe' })
-  empfehlen(@Param('id') id: string, @Param('rolle', new ZodPipe(StellenRolle)) rolle: StellenRolle, @Body(new ZodPipe(ErklaerungAbgeben)) e: ErklaerungAbgeben) {
-    return this.erklaerungen.empfehlen(id, rolle, e);
+  @ApiForbiddenResponse({ description: 'Eigene Organisation ist nicht diese Stelle' })
+  empfehlen(
+    @Param('id') id: string, @Param('rolle', new ZodPipe(StellenRolle)) rolle: StellenRolle,
+    @Body(new ZodPipe(ErklaerungAbgeben)) e: ErklaerungAbgeben, @AktuellerBenutzer() b: Benutzer,
+  ) {
+    return this.erklaerungen.empfehlen(id, rolle, e, b);
   }
 
   @Post(':id/stellen/:rolle/erklaerung')
@@ -57,7 +65,11 @@ export class VorgaengeController {
   @ApiBadRequestResponse({ description: 'Eingabe ungültig, z. B. Begründung fehlt' })
   @ApiConflictResponse({ description: 'Stelle ist nicht an der Reihe oder hat bereits erklärt' })
   @ApiUnprocessableEntityResponse({ description: 'Versagung über den Signatur-Link (einfache Signatur) nicht zulässig' })
-  erklaeren(@Param('id') id: string, @Param('rolle', new ZodPipe(StellenRolle)) rolle: StellenRolle, @Body(new ZodPipe(ErklaerungAbgeben)) e: ErklaerungAbgeben) {
-    return this.erklaerungen.erklaeren(id, rolle, e);
+  @ApiForbiddenResponse({ description: 'Eigene Organisation ist nicht diese Stelle, oder Entscheidung der Sprengelschule ohne Schulleitungsrolle' })
+  erklaeren(
+    @Param('id') id: string, @Param('rolle', new ZodPipe(StellenRolle)) rolle: StellenRolle,
+    @Body(new ZodPipe(ErklaerungAbgeben)) e: ErklaerungAbgeben, @AktuellerBenutzer() b: Benutzer,
+  ) {
+    return this.erklaerungen.erklaeren(id, rolle, e, b);
   }
 }

@@ -194,5 +194,5 @@ export class AntraegeService {
 }
 
 const dokumentSicht = (d: { id: string; dateiname: string; groesseBytes: number; besondereKategorie: boolean; automatischErstellt: boolean }): Dokument => ({
-  id: d.id, dateiname: d.dateiname, groesseBytes: d.groesseBytes, besondereKategorie: d.besondereKategorie, automatischErstellt: d.automatischErstellt,
+  id: d.id, dateiname: d.dateiname, groesseBytes: d.groesseBytes, besondereKategorie: d.besondereKategorie, automatischErstellt: d.automatischErstellt, gesperrt: false,
 });

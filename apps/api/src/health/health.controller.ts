@@ -2,8 +2,10 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { API_VERSION } from '@gastschulantrag/shared';
 import { PrismaService } from '../datenbank/prisma.service.js';
+import { Oeffentlich } from '../auth/auth.guard.js';
 
 @ApiTags('System')
+@Oeffentlich()
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: PrismaService) {}

@@ -1,0 +1,222 @@
+{
+  "realm": "gastschule",
+  "enabled": true,
+  "displayName": "Gastschulverwaltung – Testumgebung",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": false,
+  "accessTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 3600,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "de"
+  ],
+  "defaultLocale": "de",
+  "roles": {
+    "realm": [
+      {
+        "name": "sachbearbeitung",
+        "description": "Sachbearbeitung einer beteiligten Stelle"
+      },
+      {
+        "name": "schulleitung",
+        "description": "Schulleitung – entscheidet für die Sprengelschule"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "Städtische Berufsschule I Augsburg (Bebo-Wager-Berufsschule)"
+    },
+    {
+      "name": "Städtische Berufsschule für Fachinformatik Systemintegration München"
+    },
+    {
+      "name": "Stadt Augsburg"
+    },
+    {
+      "name": "Landeshauptstadt München"
+    },
+    {
+      "name": "Regierung von Schwaben"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "bearbeitung",
+      "name": "Gastschulverwaltung – Bearbeitungsseite",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "https://fereshteshahi-digitalschmiede.github.io/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "organisationen",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "organisationen",
+            "full.path": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "rollen",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "rollen",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "t.schneider",
+      "enabled": true,
+      "firstName": "Thomas",
+      "lastName": "Schneider",
+      "email": "t.schneider@gastschule.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sachbearbeitung"
+      ],
+      "groups": [
+        "/Städtische Berufsschule I Augsburg (Bebo-Wager-Berufsschule)"
+      ]
+    },
+    {
+      "username": "c.hofmann",
+      "enabled": true,
+      "firstName": "Claudia",
+      "lastName": "Hofmann",
+      "email": "c.hofmann@gastschule.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "schulleitung"
+      ],
+      "groups": [
+        "/Städtische Berufsschule I Augsburg (Bebo-Wager-Berufsschule)"
+      ]
+    },
+    {
+      "username": "a.huber",
+      "enabled": true,
+      "firstName": "Anna",
+      "lastName": "Huber",
+      "email": "a.huber@gastschule.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sachbearbeitung"
+      ],
+      "groups": [
+        "/Städtische Berufsschule für Fachinformatik Systemintegration München"
+      ]
+    },
+    {
+      "username": "m.weber",
+      "enabled": true,
+      "firstName": "Markus",
+      "lastName": "Weber",
+      "email": "m.weber@gastschule.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sachbearbeitung"
+      ],
+      "groups": [
+        "/Stadt Augsburg"
+      ]
+    },
+    {
+      "username": "p.lindner",
+      "enabled": true,
+      "firstName": "Petra",
+      "lastName": "Lindner",
+      "email": "p.lindner@gastschule.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sachbearbeitung"
+      ],
+      "groups": [
+        "/Landeshauptstadt München"
+      ]
+    },
+    {
+      "username": "n.krueger",
+      "enabled": true,
+      "firstName": "Nadine",
+      "lastName": "Krüger",
+      "email": "n.krueger@gastschule.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sachbearbeitung"
+      ],
+      "groups": [
+        "/Regierung von Schwaben"
+      ]
+    }
+  ]
+}
