@@ -1,7 +1,13 @@
 import { Module } from '@nestjs/common';
+import { AntraegeModule } from './antraege/antraege.module.js';
+import { DatenbankModule } from './datenbank/datenbank.module.js';
+import { FahrzeitModule } from './fahrzeit/fahrzeit.module.js';
 import { HealthController } from './health/health.controller.js';
+import { SchulenModule } from './schulen/schulen.module.js';
+import { VorgaengeModule } from './vorgaenge/vorgaenge.module.js';
 
 @Module({
+  imports: [DatenbankModule, SchulenModule, FahrzeitModule, AntraegeModule, VorgaengeModule],
   controllers: [HealthController],
 })
 export class AppModule {}

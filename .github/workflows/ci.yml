@@ -8,6 +8,20 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: gastschule
+          POSTGRES_PASSWORD: gastschule
+          POSTGRES_DB: gastschule
+        ports: ["54320:5432"]
+        options: >-
+          --health-cmd "pg_isready -U gastschule"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://gastschule:gastschule@localhost:54320/gastschule
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -18,4 +32,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm typecheck
+      # Tests legen eine eigene Datenbank gastschule_test an und spielen die Migrationen ein
       - run: pnpm test
