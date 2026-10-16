@@ -8,6 +8,7 @@ import { PrismaService } from '../datenbank/prisma.service.js';
 import { dauerText, FahrzeitService } from '../fahrzeit/fahrzeit.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { SCHULDATEN_QUELLE, type SchuldatenQuelle } from '../schulen/schuldaten.js';
+import { berechneLaufweg } from '../vorgaenge/laufweg.js';
 import { DATEI_SPEICHER, type DateiSpeicher } from '../speicher/datei-speicher.js';
 import { bereinigeDateiname, erkenneTyp } from './nachweise.js';
 import { hashZugangsschluessel, neuerZugangsschluessel, schluesselPasst } from './zugangsschluessel.js';
@@ -54,12 +55,16 @@ export class AntraegeService {
     const eingang = new Date();
     const zugangsschluessel = neuerZugangsschluessel();
     const name = `${antrag.schueler.vorname} ${antrag.schueler.nachname}`;
+    // Anfangsstand des Laufwegs aus derselben Logik, die später weiterschaltet (Modus: gestuft)
+    const { stand } = berechneLaufweg('gestuft', {
+      sprengelschule: 'wartet', gastschule: 'wartet', traeger_sprengelschule: 'wartet', traeger_gastschule: 'wartet', regierung: 'bedingt',
+    });
     const stellen: { rolle: StellenRolle; organisation: string; stufe: number; status: StellenStatus; frist: Date | null }[] = [
-      { rolle: 'sprengelschule', organisation: spr.name, stufe: 1, status: 'offen', frist: tagePlus(eingang, FRIST_TAGE[1]) },
-      { rolle: 'gastschule', organisation: gast.name, stufe: 1, status: 'offen', frist: tagePlus(eingang, FRIST_TAGE[1]) },
-      { rolle: 'traeger_sprengelschule', organisation: spr.sachaufwandstraeger, stufe: 2, status: 'wartet', frist: tagePlus(eingang, FRIST_TAGE[2]) },
-      { rolle: 'traeger_gastschule', organisation: gast.sachaufwandstraeger, stufe: 2, status: 'wartet', frist: tagePlus(eingang, FRIST_TAGE[2]) },
-      { rolle: 'regierung', organisation: spr.regierung, stufe: 3, status: 'bedingt', frist: null },
+      { rolle: 'sprengelschule', organisation: spr.name, stufe: 1, status: stand.sprengelschule, frist: tagePlus(eingang, FRIST_TAGE[1]) },
+      { rolle: 'gastschule', organisation: gast.name, stufe: 1, status: stand.gastschule, frist: tagePlus(eingang, FRIST_TAGE[1]) },
+      { rolle: 'traeger_sprengelschule', organisation: spr.sachaufwandstraeger, stufe: 2, status: stand.traeger_sprengelschule, frist: tagePlus(eingang, FRIST_TAGE[2]) },
+      { rolle: 'traeger_gastschule', organisation: gast.sachaufwandstraeger, stufe: 2, status: stand.traeger_gastschule, frist: tagePlus(eingang, FRIST_TAGE[2]) },
+      { rolle: 'regierung', organisation: spr.regierung, stufe: 3, status: stand.regierung, frist: null },
     ];
 
     const protokoll: Eintrag[] = [

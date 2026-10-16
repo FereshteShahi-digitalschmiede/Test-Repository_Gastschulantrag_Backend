@@ -30,6 +30,43 @@ export const Identitaetsebene = z.number().int().min(1).max(5);
 export const Signatur = z.enum(['qualifiziert', 'fortgeschritten', 'einfach', 'system']);
 export type Signatur = z.infer<typeof Signatur>;
 
+export const Votum = z.enum(['zustimmung', 'ablehnung']);
+export type Votum = z.infer<typeof Votum>;
+
+/**
+ * Handelnde Person. Bis zur Anmeldung (Etappe 4) vom Frontend mitgeschickt.
+ * ebene 2 = Funktionsidentität (Behördenkonto, fortgeschrittene Signatur), 4 = delegierter Signatur-Link (einfache Signatur)
+ */
+export const Akteur = z.object({
+  name: z.string().trim().min(1, 'Name der handelnden Person fehlt').max(120),
+  funktion: z.string().trim().min(1, 'Funktion fehlt').max(120),
+  ebene: z.union([z.literal(2), z.literal(4)]).default(2),
+});
+export type Akteur = z.infer<typeof Akteur>;
+
+/** Fachliche Angaben zur Erklärung (z. B. Fachklasse, Kapazität, Kostenübernahme) als Schlüssel/Wert */
+export const Angaben = z.record(z.string().max(40), z.string().max(200));
+
+export const ErklaerungAbgeben = z.object({
+  votum: Votum,
+  begruendung: z.string().trim().max(2000).optional(),
+  angaben: Angaben.optional(),
+  akteur: Akteur,
+});
+export type ErklaerungAbgeben = z.infer<typeof ErklaerungAbgeben>;
+
+/** Mindestlänge einer Begründung, wenn sie Pflicht ist */
+export const BEGRUENDUNG_MIN = 30;
+
+export const Empfehlung = z.object({
+  votum: Votum,
+  begruendung: z.string().nullable(),
+  angaben: Angaben.nullable(),
+  akteur: Akteur,
+  abgegebenAm: z.iso.datetime(),
+});
+export type Empfehlung = z.infer<typeof Empfehlung>;
+
 export const Stelle = z.object({
   rolle: StellenRolle,
   organisation: z.string(),
@@ -38,6 +75,10 @@ export const Stelle = z.object({
   frist: z.iso.date().nullable(),
   begruendung: z.string().nullable(),
   abgegebenAm: z.iso.datetime().nullable(),
+  angaben: Angaben.nullable(),
+  akteur: Akteur.nullable(),
+  signatur: Signatur.nullable(),
+  empfehlung: Empfehlung.nullable(),
 });
 export type Stelle = z.infer<typeof Stelle>;
 
@@ -72,11 +113,15 @@ export const VorgangKurz = z.object({
   sprengelschule: z.string(),
   gastschule: z.string(),
   schuljahr: z.string(),
+  /** Stand je Stelle – damit die Übersicht zeigt, bei wem der Vorgang liegt */
+  stellen: z.array(z.object({ rolle: StellenRolle, organisation: z.string(), status: StellenStatus })),
 });
 export type VorgangKurz = z.infer<typeof VorgangKurz>;
 
-export const VorgangDetail = VorgangKurz.extend({
+export const VorgangDetail = VorgangKurz.omit({ stellen: true }).extend({
   laufwegModus: LaufwegModus,
+  /** Wer den Bescheid erlässt, sobald er bereit ist: Sprengelschule bei Einvernehmen, sonst Regierung */
+  bescheidDurch: z.enum(['sprengelschule', 'regierung']).nullable(),
   antrag: z.unknown(),
   fahrzeit: FahrzeitErgebnis.nullable(),
   stellen: z.array(Stelle),
