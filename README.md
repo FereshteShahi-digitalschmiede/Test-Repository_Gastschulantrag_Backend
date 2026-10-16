@@ -38,7 +38,7 @@ pnpm dev           # API mit Neustart bei Änderungen
 | API-Dokumentation (OpenAPI) | http://localhost:3100/docs |
 | PostgreSQL | localhost:54320 (Benutzer/Passwort/DB: `gastschule`) |
 | S3 (SeaweedFS) | http://localhost:8333 |
-| Keycloak | http://localhost:8080 (admin / admin) |
+| Keycloak | http://localhost:8080 (Verwaltung: admin / admin) |
 | Mailpit (Test-Postfach) | http://localhost:8025 |
 
 ## Befehle
@@ -59,6 +59,7 @@ Tests laufen gegen eine eigene Datenbank `gastschule_test` (wird automatisch ang
 | Methode | Pfad | Zweck |
 |---|---|---|
 | GET | `/health` | Erreichbarkeit von API und Datenbank |
+| GET | `/konfiguration` | Anmeldedaten (Keycloak-Adresse, Client) für die Bearbeitungsseite |
 | GET | `/schulen`, `/schulen/{nr}` | Schuldaten: Adresse, frühester Unterrichtsbeginn, spätestes Ende, Träger, Regierung |
 | POST | `/fahrzeit/vergleich` | Schnellste ÖPNV-Verbindung zu Sprengel- und Gastschule, Bewertung gegen 2 Std. je Weg |
 | POST | `/antraege` | Antrag einreichen → Vorgang mit Laufweg und Revisionsprotokoll; Antwort enthält einmalig den Zugangsschlüssel |
@@ -72,7 +73,28 @@ Tests laufen gegen eine eigene Datenbank `gastschule_test` (wird automatisch ang
 Details und Beispiel-Schemas: http://localhost:3100/docs
 
 **Simuliert** (austauschbare Adapter): Schuldaten (`apps/api/src/schulen/schuldaten.ts`) und ÖPNV-Auskunft (`apps/api/src/fahrzeit/simulierte-oepnv-auskunft.ts`).
-**Noch ohne Anmeldung:** Die Endpunkte der Bearbeitungsseite (`/vorgaenge`) sind offen – Rechte und Pseudonymisierung folgen mit Keycloak (Etappe 4). Antragstellende weisen sich bis zur BayernID-Anbindung mit dem Zugangsschlüssel aus, den sie beim Einreichen erhalten; gespeichert wird nur dessen Hash.
+## Anmeldung und Rechte
+
+**Bearbeitungsseite:** `/vorgaenge` nur mit Login über Keycloak (Realm `gastschule`, Client `bearbeitung`, Authorization Code + PKCE). Das Backend prüft das Token (Signatur über JWKS, Aussteller, Ablauf, Client) und leitet daraus ab, wer handelt:
+
+| Testkonto (Passwort `test`) | Organisation | Funktion |
+|---|---|---|
+| `t.schneider` | Städt. BS I Augsburg | Sachbearbeitung – gibt die Empfehlung ab |
+| `c.hofmann` | Städt. BS I Augsburg | Schulleitung – entscheidet für die Sprengelschule |
+| `a.huber` | Städt. BS Fachinformatik München | Sachbearbeitung |
+| `m.weber` | Stadt Augsburg | Sachbearbeitung |
+| `p.lindner` | Landeshauptstadt München | Sachbearbeitung |
+| `n.krueger` | Regierung von Schwaben | Sachbearbeitung |
+
+Regeln (`apps/api/src/auth/zugriff.ts`):
+- Sichtbar sind nur Vorgänge, an denen die eigene Organisation beteiligt ist; die Regierung erst bei Dissens. Fremde Vorgänge: 404.
+- Erklären darf nur die eigene Stelle; die Entscheidung der Sprengelschule nur die Schulleitung (403).
+- Sachaufwandsträger erhalten **pseudonymisierte** Daten (kein Klarname, Geburtsdatum, Kontakt, keine Straße).
+- **Gesundheitsnachweise** (Art. 9 DSGVO) nur für Sprengelschule und Regierung – auch im Revisionsprotokoll.
+
+Testkonten und Zuordnung stehen in `keycloak/realm-gastschule.json` (wird beim ersten Start importiert; nach Änderungen: `docker compose down keycloak && docker compose up -d keycloak`).
+
+**Antragstellende** weisen sich bis zur BayernID-Anbindung mit dem Zugangsschlüssel aus, den sie beim Einreichen erhalten; gespeichert wird nur dessen Hash.
 
 ## Arbeitsweise
 

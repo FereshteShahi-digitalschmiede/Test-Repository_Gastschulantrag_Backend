@@ -8,6 +8,7 @@ import { AntragEingereicht, AntragEinreichen, AntragStand, Dokument, NACHWEIS_MA
 import { DateiZuGrossFilter } from '../common/fehler.filter.js';
 import { openapi, ZodPipe } from '../common/zod.js';
 import { AntraegeService } from './antraege.service.js';
+import { Oeffentlich } from '../auth/auth.guard.js';
 
 /** Von multer (FileInterceptor, Speicherung im Arbeitsspeicher) bereitgestellte Datei */
 interface HochgeladeneDatei { originalname: string; buffer: Buffer; size: number }
@@ -19,6 +20,7 @@ const SCHLUESSEL_DOKU = {
 };
 
 @ApiTags('Anträge')
+@Oeffentlich()
 @Controller('antraege')
 export class AntraegeController {
   constructor(private readonly antraege: AntraegeService) {}

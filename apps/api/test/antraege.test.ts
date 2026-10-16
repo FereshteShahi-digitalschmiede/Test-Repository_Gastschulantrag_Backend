@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DEMO_ANTRAEGE } from '../src/demo-antraege.js';
-import { leereDatenbank, starteApp } from './hilfen.js';
+import { als, leereDatenbank, starteApp } from './hilfen.js';
 
 const max = DEMO_ANTRAEGE[0]!;
 
@@ -44,7 +44,7 @@ describe('Schulen, Fahrzeit, Anträge und Vorgänge', () => {
     expect(res.body.aktenzeichen).toMatch(/^GS-\d{4}-88001$/);
     expect(res.body.status).toBe('in_pruefung');
 
-    const v = (await api().get(`/vorgaenge/${res.body.aktenzeichen}`).expect(200)).body;
+    const v = (await api().get(`/vorgaenge/${res.body.aktenzeichen}`).set('Authorization', await als('schneider')).expect(200)).body;
     expect(v.id).toBe(res.body.id);
     expect(v.schueler).toBe('Max Mustermann');
     expect(v.sprengelschule).toBe('Städtische Berufsschule I Augsburg (Bebo-Wager-Berufsschule)');
@@ -64,7 +64,7 @@ describe('Schulen, Fahrzeit, Anträge und Vorgänge', () => {
   it('POST /antraege ohne Fahrzeitgrund prüft keine Fahrzeit', async () => {
     const antrag = { ...max, begruendung: { kategorien: ['schulisch'], text: max.begruendung.text } };
     const { body } = await api().post('/antraege').send(antrag).expect(201);
-    const v = (await api().get(`/vorgaenge/${body.id}`).expect(200)).body;
+    const v = (await api().get(`/vorgaenge/${body.id}`).set('Authorization', await als('schneider')).expect(200)).body;
     expect(v.fahrzeit).toBeNull();
     expect(v.protokoll.some((p: { ereignis: string }) => p.ereignis.startsWith('Fahrzeitenprüfung'))).toBe(false);
   });
@@ -80,17 +80,19 @@ describe('Schulen, Fahrzeit, Anträge und Vorgänge', () => {
       'Begründung muss mindestens 50 Zeichen lang sein',
       'Gastschule und Sprengelschule müssen verschieden sein',
     ]));
-    expect((await api().get('/vorgaenge').expect(200)).body).toHaveLength(0);
+    expect((await api().get('/vorgaenge').set('Authorization', await als('weber')).expect(200)).body).toHaveLength(0);
   });
 
-  it('GET /vorgaenge filtert nach beteiligter Schule', async () => {
+  it('GET /vorgaenge zeigt nur Vorgänge der eigenen Organisation und filtert nach Schule', async () => {
     for (const a of DEMO_ANTRAEGE) await api().post('/antraege').send(a).expect(201);
-    expect((await api().get('/vorgaenge').expect(200)).body).toHaveLength(2);
-    const augsburg = (await api().get('/vorgaenge?schule=8053').expect(200)).body;
-    expect(augsburg).toHaveLength(1);
-    expect(augsburg[0].schueler).toBe('Max Mustermann');
-    expect((await api().get('/vorgaenge?schule=1343').expect(200)).body[0].schueler).toBe('Lena Beispiel');
-    await api().get('/vorgaenge/GS-2026-99999').expect(404);
-    await api().get('/vorgaenge/keine-uuid').expect(404);
+    const schule = (await api().get('/vorgaenge').set('Authorization', await als('schneider')).expect(200)).body;
+    expect(schule.map((v: { schueler: string }) => v.schueler)).toEqual(['Max Mustermann']);
+    // Stadt Augsburg ist bei beiden Anträgen Sachaufwandsträger der Sprengelschule – sieht sie pseudonymisiert
+    const traeger = (await api().get('/vorgaenge').set('Authorization', await als('weber')).expect(200)).body;
+    expect(traeger).toHaveLength(2);
+    expect(traeger.every((v: { schueler: string }) => /^Schüler:in S-[0-9A-F]{4}$/.test(v.schueler))).toBe(true);
+    expect((await api().get('/vorgaenge?schule=8053').set('Authorization', await als('weber')).expect(200)).body).toHaveLength(1);
+    await api().get('/vorgaenge/GS-2026-99999').set('Authorization', await als('schneider')).expect(404);
+    await api().get('/vorgaenge/keine-uuid').set('Authorization', await als('schneider')).expect(404);
   });
 });

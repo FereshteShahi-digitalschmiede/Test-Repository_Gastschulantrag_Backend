@@ -34,8 +34,8 @@ export const Votum = z.enum(['zustimmung', 'ablehnung']);
 export type Votum = z.infer<typeof Votum>;
 
 /**
- * Handelnde Person. Bis zur Anmeldung (Etappe 4) vom Frontend mitgeschickt.
- * ebene 2 = Funktionsidentität (Behördenkonto, fortgeschrittene Signatur), 4 = delegierter Signatur-Link (einfache Signatur)
+ * Handelnde Person – stammt aus dem Login (Keycloak), nicht aus dem Request.
+ * ebene 2 = Funktionsidentität (Behördenkonto, fortgeschrittene Signatur), 4 = delegierter Signatur-Link (einfache Signatur, ab Etappe 5)
  */
 export const Akteur = z.object({
   name: z.string().trim().min(1, 'Name der handelnden Person fehlt').max(120),
@@ -47,11 +47,11 @@ export type Akteur = z.infer<typeof Akteur>;
 /** Fachliche Angaben zur Erklärung (z. B. Fachklasse, Kapazität, Kostenübernahme) als Schlüssel/Wert */
 export const Angaben = z.record(z.string().max(40), z.string().max(200));
 
+/** Eingabe einer Erklärung bzw. Empfehlung. Wer handelt, ergibt sich aus der Anmeldung. */
 export const ErklaerungAbgeben = z.object({
   votum: Votum,
   begruendung: z.string().trim().max(2000).optional(),
   angaben: Angaben.optional(),
-  akteur: Akteur,
 });
 export type ErklaerungAbgeben = z.infer<typeof ErklaerungAbgeben>;
 
@@ -100,6 +100,8 @@ export const Dokument = z.object({
   /** Gesundheitsdaten (Art. 9 DSGVO) – nur für Sprengelschule und Regierung sichtbar */
   besondereKategorie: z.boolean(),
   automatischErstellt: z.boolean(),
+  /** Für die abrufende Stelle nicht freigegeben (Gesundheitsdaten) – Dateiname und Inhalt werden nicht ausgeliefert */
+  gesperrt: z.boolean(),
 });
 export type Dokument = z.infer<typeof Dokument>;
 
@@ -122,6 +124,10 @@ export const VorgangDetail = VorgangKurz.omit({ stellen: true }).extend({
   laufwegModus: LaufwegModus,
   /** Wer den Bescheid erlässt, sobald er bereit ist: Sprengelschule bei Einvernehmen, sonst Regierung */
   bescheidDurch: z.enum(['sprengelschule', 'regierung']).nullable(),
+  /** Rollen der angemeldeten Organisation in diesem Vorgang */
+  meineRollen: z.array(StellenRolle),
+  /** true für Sachaufwandsträger: Klarname, Geburtsdatum und Kontaktdaten sind entfernt */
+  pseudonymisiert: z.boolean(),
   antrag: z.unknown(),
   fahrzeit: FahrzeitErgebnis.nullable(),
   stellen: z.array(Stelle),

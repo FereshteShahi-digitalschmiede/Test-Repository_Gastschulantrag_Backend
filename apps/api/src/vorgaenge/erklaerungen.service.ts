@@ -1,5 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { BEGRUENDUNG_MIN, type ErklaerungAbgeben, type StellenRolle, type VorgangDetail } from '@gastschulantrag/shared';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { type Akteur, BEGRUENDUNG_MIN, type ErklaerungAbgeben, type StellenRolle, type VorgangDetail } from '@gastschulantrag/shared';
+import { type Benutzer, funktionVon, istSchulleitung } from '../auth/benutzer.js';
 import { PrismaService } from '../datenbank/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { berechneLaufweg, erklaerungText, type Stand } from './laufweg.js';
@@ -15,6 +16,9 @@ const STATUS_TEXT: Record<string, string> = {
   wartet: 'noch nicht an der Reihe', bedingt: 'nur bei Dissens beteiligt', entfaellt: 'nicht mehr beteiligt', zugestimmt: 'bereits erklärt', abgelehnt: 'bereits erklärt',
 };
 
+/** Handelnde Person aus dem Login; Behördenkonto = Funktionsidentität mit fortgeschrittener Signatur */
+const akteurAus = (b: Benutzer): Akteur => ({ name: b.name, funktion: funktionVon(b), ebene: 2 });
+
 const feldfehler = (feld: string, meldung: string) => new BadRequestException({ message: 'Ungültige Eingabe', fehler: [{ feld, meldung }] });
 const signaturVon = (ebene: 2 | 4): 'einfach' | 'fortgeschritten' => (ebene === 4 ? 'einfach' : 'fortgeschritten');
 const system = (vorgangId: string, ereignis: string, zeitpunkt: Date) => ({
@@ -26,11 +30,12 @@ export class ErklaerungenService {
   constructor(private readonly db: PrismaService, private readonly vorgaenge: VorgaengeService) {}
 
   /** Empfehlung der Sachbearbeitung an die Schulleitung (nur Sprengelschule). Kann überschrieben werden, solange die Stelle offen ist. */
-  async empfehlen(id: string, rolle: StellenRolle, e: ErklaerungAbgeben): Promise<VorgangDetail> {
+  async empfehlen(id: string, rolle: StellenRolle, eingabe: ErklaerungAbgeben, b: Benutzer): Promise<VorgangDetail> {
     if (rolle !== 'sprengelschule') throw new BadRequestException('Eine Empfehlung gibt es nur für die Sprengelschule (Sachbearbeitung → Schulleitung).');
-    if (e.votum === 'ablehnung') this.pruefeBegruendung(e.begruendung);
+    if (eingabe.votum === 'ablehnung') this.pruefeBegruendung(eingabe.begruendung);
+    const e = { ...eingabe, akteur: akteurAus(b) };
     await this.db.$transaction(async (tx) => {
-      const { stelle } = await this.sperreUndLade(tx, id, rolle);
+      const { stelle } = await this.sperreUndLade(tx, id, rolle, b);
       const jetzt = new Date();
       await tx.stelle.update({
         where: { id: stelle.id },
@@ -44,11 +49,12 @@ export class ErklaerungenService {
         },
       });
     });
-    return this.vorgaenge.detail(id);
+    return this.vorgaenge.detail(id, b);
   }
 
   /** Verbindliche Erklärung einer Stelle; danach schaltet der Laufweg weiter. */
-  async erklaeren(id: string, rolle: StellenRolle, e: ErklaerungAbgeben): Promise<VorgangDetail> {
+  async erklaeren(id: string, rolle: StellenRolle, eingabe: ErklaerungAbgeben, b: Benutzer): Promise<VorgangDetail> {
+    const e = { ...eingabe, akteur: akteurAus(b) };
     // Begründungspflicht wie im Klickdummy: bei Ablehnung, für die Schulleitung (Sprengelschule) und die Regierung
     if (e.votum === 'ablehnung' || rolle === 'sprengelschule' || rolle === 'regierung') this.pruefeBegruendung(e.begruendung);
     if (e.votum === 'ablehnung' && e.akteur.ebene === 4) {
@@ -58,7 +64,10 @@ export class ErklaerungenService {
     }
 
     await this.db.$transaction(async (tx) => {
-      const { vorgang, stelle } = await this.sperreUndLade(tx, id, rolle);
+      const { vorgang, stelle } = await this.sperreUndLade(tx, id, rolle, b);
+      if (rolle === 'sprengelschule' && !istSchulleitung(b)) {
+        throw new ForbiddenException('Die Entscheidung für die Sprengelschule trifft die Schulleitung. Die Sachbearbeitung gibt eine Empfehlung ab.');
+      }
       const jetzt = new Date();
       const zustimmung = e.votum === 'zustimmung';
       await tx.stelle.update({
@@ -91,7 +100,7 @@ export class ErklaerungenService {
       await tx.protokolleintrag.createMany({ data: eintraege });
       if (neu.phase === 'bescheid') await tx.vorgang.update({ where: { id }, data: { status: 'bescheid_bereit' } });
     });
-    return this.vorgaenge.detail(id);
+    return this.vorgaenge.detail(id, b);
   }
 
   private pruefeBegruendung(b: string | undefined) {
@@ -102,12 +111,17 @@ export class ErklaerungenService {
    * Sperrt den Vorgang bis zum Ende der Transaktion (SELECT … FOR UPDATE), damit zwei gleichzeitige Erklärungen
    * nicht beide einen veralteten Laufweg sehen, und prüft, ob die Stelle an der Reihe ist.
    */
-  private async sperreUndLade(tx: Tx, id: string, rolle: StellenRolle) {
+  private async sperreUndLade(tx: Tx, id: string, rolle: StellenRolle, b: Benutzer) {
     const gesperrt = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Vorgang" WHERE id = ${id} FOR UPDATE`;
     if (!gesperrt.length) throw new NotFoundException(`Vorgang ${id} nicht gefunden`);
     const vorgang = await tx.vorgang.findUniqueOrThrow({ where: { id }, include: { stellen: true } });
+    // Ohne jede Beteiligung: 404 (verrät nicht, ob es den Vorgang gibt); beteiligt, aber andere Stelle: 403
+    if (!vorgang.stellen.some((s) => b.organisationen.includes(s.organisation))) throw new NotFoundException(`Vorgang ${id} nicht gefunden`);
     const stelle = vorgang.stellen.find((s) => s.rolle === rolle);
     if (!stelle) throw new NotFoundException(`Stelle ${rolle} gehört nicht zum Laufweg dieses Vorgangs`);
+    if (!b.organisationen.includes(stelle.organisation)) {
+      throw new ForbiddenException(`Diese Erklärung gibt ${stelle.organisation} ab – Ihre Organisation ist dafür nicht zuständig.`);
+    }
     if (stelle.status !== 'offen') {
       throw new ConflictException(`${stelle.organisation} (${ROLLEN_TEXT[rolle]}) ist ${STATUS_TEXT[stelle.status] ?? stelle.status} – Erklärung nicht möglich.`);
     }

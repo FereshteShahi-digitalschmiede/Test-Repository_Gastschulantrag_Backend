@@ -3,8 +3,10 @@ import { ApiBadRequestResponse, ApiBody, ApiOkResponse, ApiOperation, ApiTags } 
 import { FahrzeitAnfrage, FahrzeitErgebnis } from '@gastschulantrag/shared';
 import { openapi, ZodPipe } from '../common/zod.js';
 import { FahrzeitService } from './fahrzeit.service.js';
+import { Oeffentlich } from '../auth/auth.guard.js';
 
 @ApiTags('Fahrzeit')
+@Oeffentlich()
 @Controller('fahrzeit')
 export class FahrzeitController {
   constructor(private readonly fahrzeit: FahrzeitService) {}

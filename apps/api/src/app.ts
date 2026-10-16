@@ -13,6 +13,7 @@ export function setupApp(app: INestApplication, config: Pick<Config, 'CORS_ORIGI
     .setTitle('Gastschulantrag API')
     .setDescription('Backend für Antragstellerseite und Bearbeitungsseite des Gastschulverfahrens (Art. 43 BayEUG). Nur Testdaten.')
     .setVersion('0.1.0')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Access-Token aus Keycloak (Realm gastschule, Client bearbeitung)' })
     .build();
   SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, doc));
   return app;

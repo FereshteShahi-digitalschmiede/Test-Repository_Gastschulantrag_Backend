@@ -4,8 +4,10 @@ import { Schule } from '@gastschulantrag/shared';
 import { z } from 'zod';
 import { openapi } from '../common/zod.js';
 import { SCHULDATEN_QUELLE, type SchuldatenQuelle } from './schuldaten.js';
+import { Oeffentlich } from '../auth/auth.guard.js';
 
 @ApiTags('Schulen')
+@Oeffentlich()
 @Controller('schulen')
 export class SchulenController {
   constructor(@Inject(SCHULDATEN_QUELLE) private readonly schuldaten: SchuldatenQuelle) {}
