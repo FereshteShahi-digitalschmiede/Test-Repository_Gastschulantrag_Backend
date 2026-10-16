@@ -1,0 +1,40 @@
+# Lokale Infrastruktur für die Entwicklung. Nur Testdaten – nicht für den Betrieb gedacht.
+name: gastschulantrag
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: gastschule
+      POSTGRES_PASSWORD: gastschule
+      POSTGRES_DB: gastschule
+    # Host-Port 54320, damit eine lokal installierte Postgres-Instanz (5432) nicht kollidiert
+    ports: ["${POSTGRES_PORT:-54320}:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gastschule"]
+      interval: 5s
+      retries: 10
+
+  # S3-kompatibler Speicher für Nachweise (Ersatz für MinIO, das keine Images mehr veröffentlicht)
+  s3:
+    image: chrislusf/seaweedfs:3.97
+    command: server -s3 -dir=/data
+    ports: ["8333:8333"]
+    volumes: [s3data:/data]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports: ["8080:8080"]
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["1025:1025", "8025:8025"]
+
+volumes:
+  pgdata:
+  s3data:
