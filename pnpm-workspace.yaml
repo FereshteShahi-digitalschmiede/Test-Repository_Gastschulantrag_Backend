@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Nur Paketversionen installieren, die mindestens 14 Tage veröffentlicht sind (Schutz vor kompromittierten Releases)
+minimumReleaseAge: 20160
+
+# Install-Skripte: Telemetrie (scarf) und optionales swc-Postinstall nicht ausführen
+ignoredBuiltDependencies:
+  - "@scarf/scarf"
+  - "@swc/core"
