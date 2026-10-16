@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     globalSetup: ['test/global-setup.ts'],
-    env: { DATABASE_URL: TEST_DATABASE_URL },
+    env: { DATABASE_URL: TEST_DATABASE_URL, S3_BUCKET: 'nachweise-test' },
     fileParallelism: false,
   },
 });

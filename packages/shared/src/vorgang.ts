@@ -90,5 +90,48 @@ export const AntragEingereicht = z.object({
   aktenzeichen: z.string(),
   status: VorgangStatus,
   eingegangenAm: z.iso.datetime(),
+  /**
+   * Wird nur einmal ausgegeben. Berechtigt zum Abruf des Antragsstands und zum Hochladen von Nachweisen
+   * (Header X-Zugangsschluessel) – Übergangslösung bis zur Anmeldung über BayernID.
+   */
+  zugangsschluessel: z.string(),
 });
 export type AntragEingereicht = z.infer<typeof AntragEingereicht>;
+
+/** Header, mit dem Antragstellende ihren Zugangsschlüssel mitschicken */
+export const ZUGANGSSCHLUESSEL_HEADER = 'x-zugangsschluessel';
+
+export const Fortschrittsschritt = z.object({
+  schritt: z.number().int().min(1).max(4),
+  titel: z.string(),
+  erledigtAm: z.iso.datetime().nullable(),
+  aktuell: z.boolean(),
+});
+
+export const Nachricht = z.object({
+  zeitpunkt: z.iso.datetime(),
+  titel: z.string(),
+  text: z.string(),
+});
+export type Nachricht = z.infer<typeof Nachricht>;
+
+/** Sicht der antragstellenden Person auf ihren Antrag (ohne interne Stellungnahmen) */
+export const AntragStand = z.object({
+  aktenzeichen: z.string(),
+  status: VorgangStatus,
+  eingegangenAm: z.iso.datetime(),
+  schuljahr: z.string(),
+  sprengelschule: z.string(),
+  gastschule: z.string(),
+  ausbildungsberuf: z.string().nullable(),
+  fortschritt: z.array(Fortschrittsschritt),
+  nachrichten: z.array(Nachricht),
+  dokumente: z.array(Dokument),
+  fahrzeit: FahrzeitErgebnis.nullable(),
+});
+export type AntragStand = z.infer<typeof AntragStand>;
+
+/** Zulässige Nachweise */
+export const NACHWEIS_MAX_BYTES = 10 * 1024 * 1024;
+export const NACHWEIS_TYPEN = ['application/pdf', 'image/png', 'image/jpeg'] as const;
+export const NACHWEIS_MAX_ANZAHL = 20;
