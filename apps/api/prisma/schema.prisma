@@ -62,6 +62,8 @@ model Vorgang {
   antrag           Json
   /// Ergebnis der Fahrzeitenprüfung (FahrzeitErgebnis), falls Grund "fahrzeit"
   fahrzeit         Json?
+  /// SHA-256 des Zugangsschlüssels für Antragstellende (Übergang bis zur BayernID-Anmeldung)
+  zugangsschluesselHash String?
 
   stellen   Stelle[]
   dokumente Dokument[]

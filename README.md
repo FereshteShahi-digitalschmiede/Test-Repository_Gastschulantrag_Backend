@@ -61,14 +61,16 @@ Tests laufen gegen eine eigene Datenbank `gastschule_test` (wird automatisch ang
 | GET | `/health` | Erreichbarkeit von API und Datenbank |
 | GET | `/schulen`, `/schulen/{nr}` | Schuldaten: Adresse, frühester Unterrichtsbeginn, spätestes Ende, Träger, Regierung |
 | POST | `/fahrzeit/vergleich` | Schnellste ÖPNV-Verbindung zu Sprengel- und Gastschule, Bewertung gegen 2 Std. je Weg |
-| POST | `/antraege` | Antrag einreichen → Vorgang mit Laufweg und Revisionsprotokoll |
+| POST | `/antraege` | Antrag einreichen → Vorgang mit Laufweg und Revisionsprotokoll; Antwort enthält einmalig den Zugangsschlüssel |
+| GET | `/antraege/{Aktenzeichen}` | Stand des eigenen Antrags (Header `X-Zugangsschluessel`) |
+| POST | `/antraege/{Aktenzeichen}/dokumente` | Nachweis hochladen: PDF/PNG/JPG bis 10 MB, Feld `datei` (Header `X-Zugangsschluessel`) |
 | GET | `/vorgaenge?schule={nr}` | Antragsübersicht, optional gefiltert nach beteiligter Schule |
 | GET | `/vorgaenge/{id oder Aktenzeichen}` | Vorgang mit Laufweg, Fahrzeitenprüfung, Dokumenten, Protokoll |
 
 Details und Beispiel-Schemas: http://localhost:3100/docs
 
 **Simuliert** (austauschbare Adapter): Schuldaten (`apps/api/src/schulen/schuldaten.ts`) und ÖPNV-Auskunft (`apps/api/src/fahrzeit/simulierte-oepnv-auskunft.ts`).
-**Noch ohne Anmeldung:** Alle Endpunkte sind offen – Rechte und Pseudonymisierung folgen mit Keycloak (Etappe 4).
+**Noch ohne Anmeldung:** Die Endpunkte der Bearbeitungsseite (`/vorgaenge`) sind offen – Rechte und Pseudonymisierung folgen mit Keycloak (Etappe 4). Antragstellende weisen sich bis zur BayernID-Anbindung mit dem Zugangsschlüssel aus, den sie beim Einreichen erhalten; gespeichert wird nur dessen Hash.
 
 ## Arbeitsweise
 

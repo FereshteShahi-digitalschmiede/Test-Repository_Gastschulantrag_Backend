@@ -1,9 +1,16 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import type { AntragEingereicht, AntragEinreichen, FahrzeitErgebnis, Signatur, StellenRolle, StellenStatus } from '@gastschulantrag/shared';
+import { randomUUID } from 'node:crypto';
+import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  type AntragEingereicht, type AntragEinreichen, type AntragStand, type Dokument, type FahrzeitErgebnis, NACHWEIS_MAX_ANZAHL,
+  type Nachricht, type Signatur, type StellenRolle, type StellenStatus,
+} from '@gastschulantrag/shared';
 import { PrismaService } from '../datenbank/prisma.service.js';
 import { dauerText, FahrzeitService } from '../fahrzeit/fahrzeit.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { SCHULDATEN_QUELLE, type SchuldatenQuelle } from '../schulen/schuldaten.js';
+import { DATEI_SPEICHER, type DateiSpeicher } from '../speicher/datei-speicher.js';
+import { bereinigeDateiname, erkenneTyp } from './nachweise.js';
+import { hashZugangsschluessel, neuerZugangsschluessel, schluesselPasst } from './zugangsschluessel.js';
 
 /** Bearbeitungsfristen ab Eingang in Tagen: Stufe 1 (Schulen), Stufe 2 (Sachaufwandsträger) */
 const FRIST_TAGE = { 1: 14, 2: 28 } as const;
@@ -28,6 +35,7 @@ export class AntraegeService {
     private readonly db: PrismaService,
     private readonly fahrzeit: FahrzeitService,
     @Inject(SCHULDATEN_QUELLE) private readonly schuldaten: SchuldatenQuelle,
+    @Inject(DATEI_SPEICHER) private readonly speicher: DateiSpeicher,
   ) {}
 
   /** Nimmt einen geprüften Antrag entgegen, legt den Vorgang mit Laufweg an und protokolliert jeden Schritt. */
@@ -44,6 +52,7 @@ export class AntraegeService {
     }
 
     const eingang = new Date();
+    const zugangsschluessel = neuerZugangsschluessel();
     const name = `${antrag.schueler.vorname} ${antrag.schueler.nachname}`;
     const stellen: { rolle: StellenRolle; organisation: string; stufe: number; status: StellenStatus; frist: Date | null }[] = [
       { rolle: 'sprengelschule', organisation: spr.name, stufe: 1, status: 'offen', frist: tagePlus(eingang, FRIST_TAGE[1]) },
@@ -86,6 +95,7 @@ export class AntraegeService {
           ausbildungsberuf: antrag.ausbildung.beruf ?? null,
           antrag: antrag as Prisma.InputJsonValue,
           fahrzeit: (fahrzeit ?? undefined) as Prisma.InputJsonValue | undefined,
+          zugangsschluesselHash: hashZugangsschluessel(zugangsschluessel),
           stellen: { create: stellen },
           // Millisekunden-Abstand hält die Reihenfolge der Einträge im Protokoll eindeutig
           protokoll: { create: protokoll.map((e, i) => ({ ...e, organisation: e.organisation ?? null, zeitpunkt: new Date(eingang.getTime() + i) })) },
@@ -97,6 +107,87 @@ export class AntraegeService {
       });
     });
 
-    return { id: vorgang.id, aktenzeichen: vorgang.aktenzeichen!, status: vorgang.status, eingegangenAm: vorgang.eingegangenAm.toISOString() };
+    return {
+      id: vorgang.id, aktenzeichen: vorgang.aktenzeichen!, status: vorgang.status, eingegangenAm: vorgang.eingegangenAm.toISOString(), zugangsschluessel,
+    };
+  }
+
+  /** Sicht der antragstellenden Person: Status-Ablauf, Nachrichten, Nachweise – ohne interne Stellungnahmen. */
+  async stand(aktenzeichen: string, schluessel: string | undefined): Promise<AntragStand> {
+    const v = await this.mitSchluessel(aktenzeichen, schluessel);
+    const stellen = await this.db.stelle.findMany({ where: { vorgangId: v.id, rolle: { in: ['sprengelschule', 'gastschule'] } } });
+    const name = (rolle: string, nr: string) => stellen.find((s) => s.rolle === rolle)?.organisation ?? nr;
+    const dokumente = await this.db.dokument.findMany({ where: { vorgangId: v.id }, orderBy: { hochgeladenAm: 'asc' } });
+    const entschieden = v.status === 'abgeschlossen';
+    const eingang = v.eingegangenAm.toISOString();
+
+    const nachrichten: Nachricht[] = [
+      {
+        zeitpunkt: eingang,
+        titel: `Eingangsbestätigung ${v.aktenzeichen}`,
+        text: `Ihr Antrag ist eingegangen und wurde an die ${name('sprengelschule', v.sprengelschuleNr)} und die ${name('gastschule', v.gastschuleNr)} weitergeleitet.`,
+      },
+      ...dokumente.map((d) => ({ zeitpunkt: d.hochgeladenAm.toISOString(), titel: 'Nachweis erhalten', text: `${d.dateiname} wurde Ihrem Antrag beigefügt.` })),
+    ].sort((a, b) => b.zeitpunkt.localeCompare(a.zeitpunkt));
+
+    return {
+      aktenzeichen: v.aktenzeichen!,
+      status: v.status,
+      eingegangenAm: eingang,
+      schuljahr: v.schuljahr,
+      sprengelschule: name('sprengelschule', v.sprengelschuleNr),
+      gastschule: name('gastschule', v.gastschuleNr),
+      ausbildungsberuf: v.ausbildungsberuf,
+      fortschritt: [
+        { schritt: 1, titel: 'Erstellt', erledigtAm: eingang, aktuell: false },
+        { schritt: 2, titel: 'Eingereicht', erledigtAm: eingang, aktuell: false },
+        { schritt: 3, titel: 'In Prüfung', erledigtAm: null, aktuell: !entschieden },
+        { schritt: 4, titel: 'Entscheidung', erledigtAm: null, aktuell: entschieden },
+      ],
+      nachrichten,
+      dokumente: dokumente.map(dokumentSicht),
+      fahrzeit: (v.fahrzeit as FahrzeitErgebnis | null) ?? null,
+    };
+  }
+
+  /** Prüft Inhalt, Größe und Anzahl, legt die Datei im Speicher ab und protokolliert den Eingang. */
+  async nachweisHochladen(
+    aktenzeichen: string, schluessel: string | undefined,
+    datei: { originalname: string; buffer: Buffer; size: number } | undefined, besondereKategorie: boolean,
+  ): Promise<Dokument> {
+    const v = await this.mitSchluessel(aktenzeichen, schluessel);
+    if (!datei || datei.size === 0) throw new BadRequestException('Bitte eine Datei im Feld „datei" mitsenden.');
+    const typ = erkenneTyp(datei.buffer);
+    if (!typ) throw new UnprocessableEntityException('Dateityp nicht zulässig. Erlaubt sind PDF, PNG und JPG.');
+    if ((await this.db.dokument.count({ where: { vorgangId: v.id } })) >= NACHWEIS_MAX_ANZAHL) {
+      throw new UnprocessableEntityException(`Es können höchstens ${NACHWEIS_MAX_ANZAHL} Nachweise beigefügt werden.`);
+    }
+    const dateiname = bereinigeDateiname(datei.originalname);
+    const speicherSchluessel = `vorgaenge/${v.id}/${randomUUID()}`;
+    await this.speicher.ablegen(speicherSchluessel, datei.buffer, typ);
+
+    const [dok] = await this.db.$transaction([
+      this.db.dokument.create({ data: { vorgangId: v.id, dateiname, groesseBytes: datei.size, besondereKategorie, speicherSchluessel } }),
+      this.db.protokolleintrag.create({
+        data: {
+          vorgangId: v.id,
+          ereignis: `Nachweis hochgeladen: ${dateiname}${besondereKategorie ? ' (Gesundheitsdaten, Art. 9 DSGVO)' : ''}`,
+          akteur: v.schuelerName, rolle: 'Antragsteller:in', ebene: 1, signatur: 'einfach',
+        },
+      }),
+    ]);
+    return dokumentSicht(dok);
+  }
+
+  /** 401 ohne Schlüssel; 404 bei unbekanntem Aktenzeichen ODER falschem Schlüssel (verrät nicht, ob es den Antrag gibt). */
+  private async mitSchluessel(aktenzeichen: string, schluessel: string | undefined) {
+    if (!schluessel) throw new UnauthorizedException('Zugangsschlüssel fehlt (Header X-Zugangsschluessel).');
+    const v = await this.db.vorgang.findUnique({ where: { aktenzeichen } });
+    if (!v || !schluesselPasst(schluessel, v.zugangsschluesselHash)) throw new NotFoundException(`Antrag ${aktenzeichen} nicht gefunden`);
+    return v;
   }
 }
+
+const dokumentSicht = (d: { id: string; dateiname: string; groesseBytes: number; besondereKategorie: boolean; automatischErstellt: boolean }): Dokument => ({
+  id: d.id, dateiname: d.dateiname, groesseBytes: d.groesseBytes, besondereKategorie: d.besondereKategorie, automatischErstellt: d.automatischErstellt,
+});

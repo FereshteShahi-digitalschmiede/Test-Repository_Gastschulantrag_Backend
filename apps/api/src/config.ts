@@ -7,6 +7,12 @@ const Env = z.object({
     .default('http://localhost:5173')
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
   DATABASE_URL: z.string().startsWith('postgresql://', 'DATABASE_URL muss mit postgresql:// beginnen'),
+  S3_ENDPOINT: z.url().default('http://localhost:8333'),
+  S3_BUCKET: z.string().min(3).default('nachweise'),
+  S3_REGION: z.string().default('eu-central-1'),
+  // Lokal (SeaweedFS ohne Zugangsdaten) genügen Platzhalter; im Betrieb echte Schlüssel setzen
+  S3_ACCESS_KEY: z.string().default('lokal'),
+  S3_SECRET_KEY: z.string().default('lokal'),
 });
 
 export type Config = z.infer<typeof Env>;
